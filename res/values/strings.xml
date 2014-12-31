@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">My Personal Rep</string>
+    <string name="app_title">My Personal Rep</string>
+    <string name="result"> </string>
+    <string name="button_speak">Speak Your Issue</string>
+    <string name="button_wait">Please wait</string>
+    <string name="button_stop">Stop</string>
+    <string name="button_cancel">Cancel</string>
+    <string name="status_listening">(Listening...)</string>
+    <string name="status_audio">(Listening [level %d])</string>
+    <string name="status_processing">(Processing...)</string>
+</resources>
