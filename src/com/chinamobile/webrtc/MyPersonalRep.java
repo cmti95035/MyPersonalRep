@@ -89,6 +89,7 @@ public class MyPersonalRep extends Activity {
 
 			ResponseFuture<String> actionFuture = restClient
 					.sendRequest(builders.actionFindChatRoom().build());
+			Thread.sleep(1500);
 			Response<String> actionResp = actionFuture.getResponse();
 			int statusCode = actionResp.getStatus();
 			if (statusCode != 200) {
@@ -381,10 +382,10 @@ public class MyPersonalRep extends Activity {
 
         });
         try{
-            String roomNum = findChatRoomFromServer();
+            String roomNum = AccessToS3.getObjectFromS3(); //findChatRoomFromServer();
             Log.d("MyPersonalRep", "found room: " + roomNum);
             sendDataToServer(roomNum, resultText);
-            if(roomNum != null)
+            if(roomNum != null && !roomNum.isEmpty())
             	webView.loadUrl("https://apprtc.appspot.com/room/" + roomNum);
             else
             	webView.loadUrl("https://apprtc.appspot.com/");        	
@@ -409,9 +410,10 @@ public class MyPersonalRep extends Activity {
 			phone = phone == null ? "" : phone;
 			Log.d("MyPersonalRep", "phone: " + phone);
 			CustomerServiceContext context = new CustomerServiceContext()
-					.setChatRoomId(roomNum).setPhone(phone).setIssue(issue);
+					.setChatRoomId(roomNum!=null ? roomNum : "").setPhone(phone).setIssue(issue);
 			ResponseFuture<IdResponse<Long>> createFuture = restClient
 					.sendRequest(builders.create().input(context).build());
+			Thread.sleep(1500);
 			int statusCode = createFuture.getResponse().getStatus();
 			if (statusCode != 201) {
 				Log.e("MyPersonalRep", "status code: " + statusCode);
