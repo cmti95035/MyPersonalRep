@@ -1,10 +1,16 @@
 package com.chinamobile.webrtc;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.net.URLEncoder;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.att.android.speech.ATTSpeechError;
 import com.att.android.speech.ATTSpeechError.ErrorType;
@@ -14,14 +20,26 @@ import com.att.android.speech.ATTSpeechResult;
 import com.att.android.speech.ATTSpeechResultListener;
 import com.att.android.speech.ATTSpeechService;
 import com.att.android.speech.ATTSpeechStateListener;
+import com.chinamobile.customerservice.server.CustomerServiceContext;
+import com.chinamobile.customerservice.server.CustomerServiceRequestBuilders;
+import com.linkedin.r2.transport.common.Client;
+import com.linkedin.r2.transport.common.bridge.client.TransportClientAdapter;
+import com.linkedin.r2.transport.http.client.HttpClientFactory;
+import com.linkedin.restli.client.Response;
+import com.linkedin.restli.client.ResponseFuture;
+import com.linkedin.restli.client.RestClient;
+import com.linkedin.restli.common.EmptyRecord;
+import com.linkedin.restli.common.IdResponse;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Build;
 import android.os.Bundle;
+import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.View;
 import android.webkit.PermissionRequest;
@@ -38,7 +56,102 @@ public class MyPersonalRep extends Activity {
     private TextView resultView = null;
     private WebView webView = null;
     private String oauthToken = null;
+    private static final String USER_AGENT = "Mozilla/5.0";
+    private static String WEBRTC_URL = "https://apprtc.appspot.com";
     
+    /**
+     * way to find the phone number from an android phone
+     * @return
+     */
+    public String getMyPhoneNumber()
+    {
+        return ((TelephonyManager) getSystemService(TELEPHONY_SERVICE))
+                .getLine1Number();
+    }
+
+    /**
+     * Call to the server to get a chat room number to access
+     * the apprtc.appspot.com
+     * @return
+     */
+	private String findChatRoomFromServer() {
+		String room = "";
+		try {
+
+			final HttpClientFactory http = new HttpClientFactory();
+			final Client r2Client = new TransportClientAdapter(
+					http.getClient(Collections.<String, String> emptyMap()));
+
+			// Create a RestClient to talk to customer service server
+			RestClient restClient = new RestClient(r2Client,
+					"http://54.67.77.140:8080/CustomerService-server/");
+			CustomerServiceRequestBuilders builders = new CustomerServiceRequestBuilders();
+
+			ResponseFuture<String> actionFuture = restClient
+					.sendRequest(builders.actionFindChatRoom().build());
+			Response<String> actionResp = actionFuture.getResponse();
+			int statusCode = actionResp.getStatus();
+			if (statusCode != 200) {
+				Log.e("MyPersonalRep", "status code: " + statusCode);
+			}
+			room = actionResp.getEntity();
+		} catch (Exception ex) {
+			Log.d("MyPersonalRep", ex.getMessage());
+			for(StackTraceElement elem : ex.getStackTrace())
+			{
+				Log.d("MyPersonalRep", elem.toString());
+			}
+		}
+
+		return room;
+	}
+	
+	/**
+	 * Use a HttpURLConnection to get a room number directly from 
+	 * apprtc.appspot.com
+	 * @return
+	 */
+	private String findChatRoomNumber() {
+		String retValue = null;
+		try {
+			
+			URL obj = new URL(WEBRTC_URL);
+			HttpURLConnection con = (HttpURLConnection) obj.openConnection();
+
+			// optional default is GET
+			con.setRequestMethod("GET");
+
+			// add request header
+			con.setRequestProperty("User-Agent", USER_AGENT);
+
+			BufferedReader in = new BufferedReader(new InputStreamReader(
+					con.getInputStream()));
+			String inputLine;
+
+			Pattern pattern = Pattern.compile(WEBRTC_URL + "/r/\\d+");
+			Matcher matcher = null;
+			while ((inputLine = in.readLine()) != null) {
+				Log.d("findChatRoomNumber", inputLine);
+				matcher = pattern.matcher(inputLine);
+				if (matcher.find()) {
+					String[] parts = matcher.group().toString().split("/");
+					Log.d("MyPersonalRep", "Found a match: "
+							+ parts[parts.length - 1]);
+					retValue = parts[parts.length - 1];
+				}
+			}
+			in.close();
+		} catch (Exception ex) {
+			for(StackTraceElement elem : ex.getStackTrace())
+			{
+				Log.d("MyPersonalRep", elem.toString());
+			}
+			Log.d("MyPersonalRep", "found exception: " + ex.getMessage());
+			
+		}
+		return retValue;
+	}
+	
     /** 
      * Called when the activity is first created.  This is where we'll hook up 
      * our views in XML layout files to our application.
@@ -166,7 +279,7 @@ public class MyPersonalRep extends Activity {
 
             // Finally we have all the information needed to start the speech service.  
             speechService.startListening();
-            Log.v("MyPersonalRep", "Starting speech interaction");
+            Log.d("MyPersonalRep", "Starting speech interaction");
         }
     };
     
@@ -254,32 +367,64 @@ public class MyPersonalRep extends Activity {
          {
 
             @SuppressLint("NewApi") 
-            @Override
+            //@Override
             public void onPermissionRequest(final PermissionRequest request) {
-                Log.d("onpermission", "onPermissionRequest");
-                // getActivity().runOnUiThread(new Runnable() {
+                Log.d("MyPersonalRep", "onPermissionRequest");
                 runOnUiThread(new Runnable() {
                 	@TargetApi(Build.VERSION_CODES.LOLLIPOP)
                     @Override
                     public void run() {
                 		request.grant(request.getResources());
-//                        if (request.getOrigin().toString().equals("https://apprtc.appspot.com/")) 
-//                            
-////                         if(request.getOrigin().toString().equals("http://conf-call.org/"))
-//                         {
-//                            request.grant(request.getResources());
-//                        } else {
-//                            request.deny();
-//                        }
                     }
                 });
             }
 
         });
-        webView.loadUrl("https://apprtc.appspot.com/");
-        //webView.setWebChromeClient(new WebChromeClient());
+        try{
+            String roomNum = findChatRoomFromServer();
+            Log.d("MyPersonalRep", "found room: " + roomNum);
+            sendDataToServer(roomNum, resultText);
+            if(roomNum != null)
+            	webView.loadUrl("https://apprtc.appspot.com/room/" + roomNum);
+            else
+            	webView.loadUrl("https://apprtc.appspot.com/");        	
+        }catch(Exception ex)
+        {
+        	Log.d("MyPersonalRep", "exception: " + ex.getMessage());
+        }
     }
     
+	private void sendDataToServer(String roomNum, String issue) {
+		try {
+
+			final HttpClientFactory http = new HttpClientFactory();
+			final Client r2Client = new TransportClientAdapter(
+					http.getClient(Collections.<String, String> emptyMap()));
+
+			// Create a RestClient to talk to customer service server
+			RestClient restClient = new RestClient(r2Client,
+					"http://54.67.77.140:8080/CustomerService-server/");
+			CustomerServiceRequestBuilders builders = new CustomerServiceRequestBuilders();
+			String phone = getMyPhoneNumber();
+			phone = phone == null ? "" : phone;
+			Log.d("MyPersonalRep", "phone: " + phone);
+			CustomerServiceContext context = new CustomerServiceContext()
+					.setChatRoomId(roomNum).setPhone(phone).setIssue(issue);
+			ResponseFuture<IdResponse<Long>> createFuture = restClient
+					.sendRequest(builders.create().input(context).build());
+			int statusCode = createFuture.getResponse().getStatus();
+			if (statusCode != 201) {
+				Log.e("MyPersonalRep", "status code: " + statusCode);
+			}
+		} catch (Exception ex) {
+			Log.d("MyPersonalRep", ex.getMessage());
+			for(StackTraceElement elem : ex.getStackTrace())
+			{
+				Log.d("MyPersonalRep", elem.toString());
+			}
+		}
+	}
+	
     /** Configure the webview that displays websites with the recognition text. **/
     private void configureWebView() {
         webView.getSettings().setJavaScriptEnabled(true);
